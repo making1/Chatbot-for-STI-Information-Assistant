@@ -238,7 +238,7 @@ if mode=="Learner assistant":
  session_idle_watch()
  if st.session_state["_session_closed"]:
   st.info("This conversation has ended. Your next question will automatically start a new session." if lang=="en" else "Mazungumzo haya yamekamilika. Swali linalofuata litaanza kikao kipya kiotomatiki.")
- with st.sidebar.expander("Links for STI Informations)",expanded=False):
+ with st.sidebar.expander("Links for STI Informations",expanded=False):
   st.caption("Click on any of the links below to learn more about STI.")
   for category,(label,url) in RESOURCE_LINKS.items():
    if st.button(label,key=f"sidebar_service_{category}"):
@@ -303,9 +303,9 @@ else:
  if not st.session_state.get("admin_ok"):
   configured_user=secret_value("ADMIN_USERNAME"); configured_password=secret_value("ADMIN_PASSWORD")
   if not configured_user or not configured_password:
-   st.error("Admin login is not configured. Add ADMIN_USERNAME and ADMIN_PASSWORD in Streamlit App Settings > Secrets, save, then reboot the app.")
+   st.error("Admin login is not configured. Add ADMIN_USERNAME and ADMIN_PASSWORD, then reboot the app.")
    st.stop()
-  st.info("Use the ADMIN_USERNAME and ADMIN_PASSWORD currently configured in Streamlit Secrets.")
+  st.info("Log in using the ADMIN_USERNAME and ADMIN_PASSWORD.")
   u=st.text_input("Username"); p=st.text_input("Password",type="password")
   if st.button("Log in"):
    s=Session(); z=s.query(User).filter_by(username=u,active=True).first(); ok=z and verify_password(p,z.password_hash);s.close()
