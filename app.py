@@ -215,7 +215,7 @@ def extract(t):
  return o
 def log(s,a,act,typ,oid="",d=""):s.add(Audit(actor=a,action=act,object_type=typ,object_id=str(oid),details=d))
 st.set_page_config(page_title="STI Information Assistant",page_icon="🩺",layout="wide"); boot()
-st.title("STI Information Assistant"); st.caption("Educational/research prototype — not a diagnostic or prescribing system.")
+st.title("STI Information Assistant"); st.caption("This is an Educational Chatbot on Sexually Transmitted Infection and not a diagnostic or prescribing system.")
 mode=st.sidebar.radio("Open",["Learner assistant","Admin"])
 if mode=="Learner assistant":
  lang=st.selectbox("Language / Lugha",[("English","en"),("Kiswahili","sw")],format_func=lambda z:z[0])[1]
@@ -228,7 +228,7 @@ if mode=="Learner assistant":
   age_bracket=st.selectbox("Age bracket" if lang=="en" else "Kundi la umri",["Prefer not to say","18-19 years","20-22 years","23-25 years"])
   sexually_active=st.selectbox("Sexually active?" if lang=="en" else "Je, unashiriki ngono?",["Prefer not to say","Yes","No"])
  with c2:
-  residence=st.text_input("Residence (county/town only)" if lang=="en" else "Makazi (kaunti/mji pekee)",placeholder="e.g. Nairobi")
+  residence=st.text_input("Residence (county/town only)" if lang=="en" else "Makazi (kaunti/mji pekee)",placeholder="e.g. Bomet")
   nearest_health_facility=st.text_input("Nearest health facility" if lang=="en" else "Kituo cha afya kilicho karibu",placeholder="e.g. local clinic or hospital")
  demographic_consent=st.checkbox("I consent to storing these basic details in de-identified form for aggregate research reporting." if lang=="en" else "Ninakubali taarifa hizi za msingi zihifadhiwe bila utambulisho kwa ripoti za jumla za utafiti.")
  if "_usage_session" not in st.session_state or "_session_closed" not in st.session_state:
@@ -238,8 +238,8 @@ if mode=="Learner assistant":
  session_idle_watch()
  if st.session_state["_session_closed"]:
   st.info("This conversation has ended. Your next question will automatically start a new session." if lang=="en" else "Mazungumzo haya yamekamilika. Swali linalofuata litaanza kikao kipya kiotomatiki.")
- with st.sidebar.expander("STI service links (optional)",expanded=False):
-  st.caption("Opening a service link is counted separately from automated recommendations.")
+ with st.sidebar.expander("Links for STI Informations)",expanded=False):
+  st.caption("Click on any of the links below to learn more about STI.")
   for category,(label,url) in RESOURCE_LINKS.items():
    if st.button(label,key=f"sidebar_service_{category}"):
     usage_event("service_link_click",link_category=category)
@@ -317,7 +317,7 @@ else:
   t1,t2,t3,t4,t5,t6,t7,t8=st.tabs(["Review content","Create content","Approved content","Participant reporting","Usage analytics","Audit log","Privacy / retention","Account"])
   with t1:
    s=Session(); pending=s.query(Content).filter_by(status="pending_review").order_by(Content.id).all()
-   st.caption("Approval must be performed by an actual qualified reviewer. The application does not manufacture expert approval.")
+   st.caption("Approval must be performed by a qualified reviewer since the application does not approve the contents.")
    for c in pending:
     with st.expander(f"#{c.id} [{c.language}] {c.title}"):
      st.write(c.body);st.caption(f"{c.source} | v{c.version}");rv=st.text_input("Reviewer name / role",key=f"r{c.id}");a,b=st.columns(2)
