@@ -219,7 +219,7 @@ st.title("STI Information Assistant"); st.caption("This is an Educational Chatbo
 mode=st.sidebar.radio("Open",["Learner assistant","Admin"])
 if mode=="Learner assistant":
  lang=st.selectbox("Language / Lugha",[("English","en"),("Kiswahili","sw")],format_func=lambda z:z[0])[1]
- st.info("Do not enter identifying information. Symptoms alone cannot confirm an STI." if lang=="en" else "Usiweke taarifa zinazokutambulisha. Dalili pekee haziwezi kuthibitisha STI.")
+ st.info("Do not enter identifying information and note that Symptoms alone cannot confirm an STI." if lang=="en" else "Usiweke taarifa zinazokutambulisha na ujue kwamba dalili pekee haziwezi kuthibitisha STI.")
  st.subheader("Basic information" if lang=="en" else "Taarifa za msingi")
  st.caption("These fields are used only for aggregate research reporting. Avoid entering a home address." if lang=="en" else "Taarifa hizi hutumika tu kwa ripoti za jumla za utafiti. Usiweke anwani ya nyumbani.")
  c1,c2=st.columns(2)
