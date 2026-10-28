@@ -80,3 +80,10 @@ A new analytics session starts automatically on entry to the Learner assistant. 
 - Actual service-link clicks are now captured via optional links in the **sidebar**, outside the chat thread. Recommendations continue to be counted separately in Usage analytics.
 - Analytics event counts start from newly processed questions; past inquiries cannot be reconstructed automatically.
 - This is phrase-based extraction and can miss wording; it does not diagnose or verify symptoms.
+
+
+## V16 machine-learning information extraction
+Added a multi-label character n-gram TF-IDF + one-vs-rest logistic regression entity mention classifier (`models/entity_model.joblib`). It extracts STI topic, symptom and exposure mentions from questions; duration remains pattern-based. Aggregation stays in Admin → Usage analytics, and the learner chat remains sequential. See `docs/ML_ENTITY_EXTRACTION.md` and `evaluation/entity_metrics.json`. Synthetic evaluation is not independent validation. No automatic training on private user questions.
+
+## V17 inquiry signal visualization
+Admin analytics includes a county-level privacy-threshold map, daily inquiry chart, STI mention chart, and extraction discrepancy report. This is **not** STI prevalence estimation or outbreak detection. See `docs/SURVEILLANCE_DASHBOARD.md`.

@@ -213,13 +213,44 @@ def extract(t):
    if any(re.search(rx,x) for rx in regexes):o[typ].append(label)
  o["durations"]=re.findall(r"\\b\\d+\\s*(?:days?|weeks?|months?|siku|wiki|mwezi|miezi)\\b",x)
  return o
+@st.cache_resource
+def entity_model():
+ try:
+  artifact=joblib.load(R/"models/entity_model.joblib")
+  return artifact
+ except Exception:
+  return None
+
+def extract_meaning(question):
+ """ML multilabel prediction + transparent rule fallback; no diagnoses."""
+ base=extract(question)
+ artifact=entity_model()
+ if artifact is not None:
+  probabilities=artifact["pipeline"].predict_proba([question])[0]
+  for label,score in zip(artifact["classes"],probabilities):
+   if score < artifact["threshold"]:continue
+   kind,value=label.split(":",1)
+   if kind in ("topics","symptoms","exposures") and value not in base[kind]:
+    base[kind].append(value)
+ # Simple explicit negation guard for frequent symptom assertions.
+ # Does not claim comprehensive negation handling.
+ negations={
+  "genital_itching":r"\\b(?:no|without|not experiencing)\\s+(?:genital\\s+)?itch(?:ing|iness)?\\b",
+  "dysuria":r"\\b(?:no|without)\\s+(?:painful urination|pain when (?:i )?pee|burning urination)\\b",
+  "fever":r"\\b(?:no|without)\\s+fever\\b",
+ }
+ text=question.casefold()
+ for label,pattern in negations.items():
+  if re.search(pattern,text) and label in base["symptoms"]:
+   base["symptoms"].remove(label)
+ return base
 def log(s,a,act,typ,oid="",d=""):s.add(Audit(actor=a,action=act,object_type=typ,object_id=str(oid),details=d))
 st.set_page_config(page_title="STI Information Assistant",page_icon="🩺",layout="wide"); boot()
-st.title("STI Information Assistant"); st.caption("This is an Educational Chatbot on Sexually Transmitted Infection and not a diagnostic or prescribing system.")
+st.title("STI Information Assistant"); st.caption("Educational/research prototype — not a diagnostic or prescribing system.")
 mode=st.sidebar.radio("Open",["Learner assistant","Admin"])
 if mode=="Learner assistant":
  lang=st.selectbox("Language / Lugha",[("English","en"),("Kiswahili","sw")],format_func=lambda z:z[0])[1]
- st.info("Do not enter identifying information and note that Symptoms alone cannot confirm an STI." if lang=="en" else "Usiweke taarifa zinazokutambulisha na ujue kwamba dalili pekee haziwezi kuthibitisha STI.")
+ st.info("Do not enter identifying information. Symptoms alone cannot confirm an STI." if lang=="en" else "Usiweke taarifa zinazokutambulisha. Dalili pekee haziwezi kuthibitisha STI.")
  st.subheader("Basic information" if lang=="en" else "Taarifa za msingi")
  st.caption("These fields are used only for aggregate research reporting. Avoid entering a home address." if lang=="en" else "Taarifa hizi hutumika tu kwa ripoti za jumla za utafiti. Usiweke anwani ya nyumbani.")
  c1,c2=st.columns(2)
@@ -228,7 +259,7 @@ if mode=="Learner assistant":
   age_bracket=st.selectbox("Age bracket" if lang=="en" else "Kundi la umri",["Prefer not to say","18-19 years","20-22 years","23-25 years"])
   sexually_active=st.selectbox("Sexually active?" if lang=="en" else "Je, unashiriki ngono?",["Prefer not to say","Yes","No"])
  with c2:
-  residence=st.text_input("Residence (county/town only)" if lang=="en" else "Makazi (kaunti/mji pekee)",placeholder="e.g. Bomet")
+  residence=st.text_input("Residence (county/town only)" if lang=="en" else "Makazi (kaunti/mji pekee)",placeholder="e.g. Nairobi")
   nearest_health_facility=st.text_input("Nearest health facility" if lang=="en" else "Kituo cha afya kilicho karibu",placeholder="e.g. local clinic or hospital")
  demographic_consent=st.checkbox("I consent to storing these basic details in de-identified form for aggregate research reporting." if lang=="en" else "Ninakubali taarifa hizi za msingi zihifadhiwe bila utambulisho kwa ripoti za jumla za utafiti.")
  if "_usage_session" not in st.session_state or "_session_closed" not in st.session_state:
@@ -238,8 +269,8 @@ if mode=="Learner assistant":
  session_idle_watch()
  if st.session_state["_session_closed"]:
   st.info("This conversation has ended. Your next question will automatically start a new session." if lang=="en" else "Mazungumzo haya yamekamilika. Swali linalofuata litaanza kikao kipya kiotomatiki.")
- with st.sidebar.expander("Links for STI Informations",expanded=False):
-  st.caption("Click on any of the links below to learn more about STI.")
+ with st.sidebar.expander("STI service links (optional)",expanded=False):
+  st.caption("Opening a service link is counted separately from automated recommendations.")
   for category,(label,url) in RESOURCE_LINKS.items():
    if st.button(label,key=f"sidebar_service_{category}"):
     usage_event("service_link_click",link_category=category)
@@ -268,7 +299,7 @@ if mode=="Learner assistant":
    usage_event("response_completed",topic="conversation_termination")
    close_learner_session("termination_text")
    st.rerun()
-  m=model(); intent=classify_inquiry(q,m); e=extract(q); concern=concern_key(q)
+  m=model(); intent=classify_inquiry(q,m); e=extract_meaning(q); concern=concern_key(q)
   if concern:intent="SYMPTOMS"
   detected_topic=e["topics"][0] if e["topics"] else intent.lower()
   st.session_state["_history"].append({"role":"user","text":q})
@@ -303,9 +334,9 @@ else:
  if not st.session_state.get("admin_ok"):
   configured_user=secret_value("ADMIN_USERNAME"); configured_password=secret_value("ADMIN_PASSWORD")
   if not configured_user or not configured_password:
-   st.error("Admin login is not configured. Add ADMIN_USERNAME and ADMIN_PASSWORD, then reboot the app.")
+   st.error("Admin login is not configured. Add ADMIN_USERNAME and ADMIN_PASSWORD in Streamlit App Settings > Secrets, save, then reboot the app.")
    st.stop()
-  st.info("Log in using the ADMIN_USERNAME and ADMIN_PASSWORD.")
+  st.info("Use the ADMIN_USERNAME and ADMIN_PASSWORD currently configured in Streamlit Secrets.")
   u=st.text_input("Username"); p=st.text_input("Password",type="password")
   if st.button("Log in"):
    s=Session(); z=s.query(User).filter_by(username=u,active=True).first(); ok=z and verify_password(p,z.password_hash);s.close()
@@ -317,7 +348,7 @@ else:
   t1,t2,t3,t4,t5,t6,t7,t8=st.tabs(["Review content","Create content","Approved content","Participant reporting","Usage analytics","Audit log","Privacy / retention","Account"])
   with t1:
    s=Session(); pending=s.query(Content).filter_by(status="pending_review").order_by(Content.id).all()
-   st.caption("Approval must be performed by a qualified reviewer since the application does not approve the contents.")
+   st.caption("Approval must be performed by an actual qualified reviewer. The application does not manufacture expert approval.")
    for c in pending:
     with st.expander(f"#{c.id} [{c.language}] {c.title}"):
      st.write(c.body);st.caption(f"{c.source} | v{c.version}");rv=st.text_input("Reviewer name / role",key=f"r{c.id}");a,b=st.columns(2)
@@ -408,6 +439,104 @@ else:
    st.caption("STI topics count only explicitly named infections (e.g., gonorrhoea), not broad symptom questions. Symptom counts require matched wording; unmatched questions do not imply symptoms are absent. Resource recommendations are separate from actual service-link clicks.")
    st.caption("Drop-off is an operational proxy, not a clinical outcome. Session duration is measured from first to last recorded activity.")
    db.close()
+  with st.expander("STI inquiry signal maps, trends and technical discrepancy report",expanded=False):
+   st.warning("These are **chatbot inquiry mentions**, NOT measured STI prevalence, confirmed cases or outbreak alerts. Do not use these results to diagnose or declare an outbreak. Confirmed epidemiological reporting requires verified case counts, population denominators, surveillance coverage and public-health review.")
+   import pandas as pd
+   # Only join records where both inquiry and demographic storage were explicitly consented.
+   review_db=Session()
+   inquiries=review_db.query(Inquiry).filter_by(consent_to_store=True).all()
+   profiles=review_db.query(DemographicProfile).filter_by(consent_to_store=True).order_by(DemographicProfile.created_at.desc()).all()
+   profile_by_session={}
+   for profile in profiles:
+    profile_by_session.setdefault(profile.session_hash,profile)
+   # Approximate county centroids, not users' physical positions.
+   county_coords={
+    "nairobi":(-1.2864,36.8172),"mombasa":(-4.0435,39.6682),"kisumu":(-0.0917,34.7680),
+    "nakuru":(-0.3031,36.0800),"kiambu":(-1.1714,36.8356),"machakos":(-1.5177,37.2634),
+    "kajiado":(-1.8524,36.7768),"uasin gishu":(0.5143,35.2698),"kakamega":(0.2827,34.7519),
+    "kilifi":(-3.6305,39.8499),"kwale":(-4.1741,39.4521),"busia":(0.4608,34.1115),
+    "bungoma":(0.5635,34.5606),"meru":(0.0463,37.6559),"embu":(-0.5388,37.4596),
+    "nyeri":(-0.4201,36.9476),"kirinyaga":(-0.6591,37.3827),"murang'a":(-0.7210,37.1526),
+    "nyandarua":(-0.1833,36.4667),"laikipia":(0.3606,36.7820),"narok":(-1.0783,35.8711),
+    "kericho":(-0.3677,35.2831),"bomet":(-0.7813,35.3416),"nandi":(0.1833,35.1167),
+    "trans nzoia":(1.0567,34.9507),"siaya":(0.0612,34.2882),"homa bay":(-0.5273,34.4571),
+    "migori":(-1.0634,34.4731),"kisii":(-0.6817,34.7667),"nyamira":(-0.5633,34.9358),
+    "vihiga":(0.0743,34.7220),"turkana":(3.1167,35.6000),"west pokot":(1.6219,35.2167),
+    "samburu":(1.2155,36.9541),"isiolo":(0.3556,37.5833),"marsabit":(2.3284,37.9899),
+    "mandera":(3.9373,41.8569),"wajir":(1.7471,40.0573),"garissa":(-0.4532,39.6461),
+    "tana river":(-1.5264,40.0193),"lamu":(-2.2717,40.9020),"taita taveta":(-3.3964,38.5561),
+    "kitui":(-1.3667,38.0167),"makueni":(-1.8041,37.6203),"tharaka nithi":(-0.2960,37.9030),
+    "baringo":(0.4700,35.9700),"elgeyo marakwet":(0.9500,35.5100),"kapenguria":(1.2389,35.1119)
+   }
+   def normalize_county(raw):
+    value=(raw or "").casefold().strip()
+    value=re.sub(r"\b(county|kaunti)\b","",value).strip()
+    # Do not guess a county from a free-text town or address.
+    return value if value in county_coords else None
+   observed=[];unmatched=0;malformed=0;disagreement=0;missing_profile=0
+   for inquiry in inquiries:
+    try:
+     entities=json.loads(inquiry.entities_json or "{}")
+     if not isinstance(entities,dict):raise ValueError("invalid entities")
+    except (ValueError,TypeError):
+     malformed+=1;continue
+    topics=entities.get("topics",[]);symptoms=entities.get("symptoms",[])
+    if not isinstance(topics,list) or not isinstance(symptoms,list):malformed+=1;continue
+    profile=profile_by_session.get(inquiry.session_hash)
+    if profile is None:missing_profile+=1
+    county=normalize_county(profile.residence) if profile else None
+    if profile and not county:unmatched+=1
+    # Diagnostic disagreement is not ground-truth error: it flags records for manual QA.
+    if inquiry.raw_text:
+     rule=extract(inquiry.raw_text)
+     if set(rule.get("topics",[]))!=set(topics) or set(rule.get("symptoms",[]))!=set(symptoms):
+      disagreement+=1
+    observed.append({"day":inquiry.created_at.date() if inquiry.created_at else None,
+                     "session":inquiry.session_hash,"county":county,"topics":list(set(topics)),
+                     "symptoms":list(set(symptoms))})
+   review_db.close()
+   st.caption("Location is an optional self-reported county, mapped to its approximate centroid. County data are shown only for groups with at least five distinct consented sessions; towns, unknown counties and small groups are suppressed.")
+   a,b,c,d=st.columns(4)
+   a.metric("Consented inquiries",len(inquiries));b.metric("Malformed extraction records",malformed)
+   c.metric("Extractor disagreements",disagreement);d.metric("Unmatched / missing county",unmatched+missing_profile)
+   st.caption("Extractor disagreement means ML+rules and rules-only outputs differ; it does not prove either is incorrect. Repeated demographic profiles are deduplicated by session.")
+   if observed:
+    day_counts={}
+    for rec in observed:
+     if rec["day"]:day_counts[rec["day"]]=day_counts.get(rec["day"],0)+1
+    if day_counts:
+     st.markdown("**Daily consented inquiry volume (not case incidence)**")
+     st.line_chart(pd.DataFrame([{"date":str(k),"inquiries":v} for k,v in sorted(day_counts.items())]).set_index("date"))
+    topic_rows=[]
+    for rec in observed:
+     for topic in rec["topics"]:topic_rows.append({"topic":topic,"session":rec["session"]})
+    if topic_rows:
+     tdf=pd.DataFrame(topic_rows).drop_duplicates()
+     st.markdown("**Sessions mentioning named STIs (not diagnosed infections)**")
+     st.bar_chart(tdf.groupby("topic")["session"].nunique())
+    groups={}
+    for rec in observed:
+     if rec["county"]:groups.setdefault(rec["county"],set()).add(rec["session"])
+    eligible={county:len(sids) for county,sids in groups.items() if len(sids)>=5}
+    if eligible:
+     st.markdown("**Geographic distribution of consenting chatbot sessions (county centroid)**")
+     map_df=pd.DataFrame([{"county":county.title(),"lat":county_coords[county][0],"lon":county_coords[county][1],"sessions":count} for county,count in sorted(eligible.items())])
+     st.map(map_df,latitude="lat",longitude="lon",size="sessions")
+     st.dataframe(map_df[["county","sessions"]],use_container_width=True,hide_index=True)
+    else:st.info("No county meets the minimum five-session privacy threshold yet. The geographic map is suppressed.")
+    st.markdown("**Potential technical discrepancies and limitations**")
+    st.dataframe(pd.DataFrame([
+     {"check":"Malformed entity JSON / types","records":malformed,"interpretation":"Unable to interpret stored extraction"},
+     {"check":"ML/rule disagreement","records":disagreement,"interpretation":"Manual label review needed; not confirmed error"},
+     {"check":"Unrecognized self-reported county","records":unmatched,"interpretation":"Location cannot be mapped reliably"},
+     {"check":"No consented demographic record","records":missing_profile,"interpretation":"Not eligible for geographic breakdown"}
+    ]),use_container_width=True,hide_index=True)
+    st.download_button("Download aggregate data-quality report (CSV)",data=pd.DataFrame([
+     {"check":"malformed_extractions","count":malformed},{"check":"extractor_disagreements","count":disagreement},
+     {"check":"unmatched_county","count":unmatched},{"check":"missing_consenting_profile","count":missing_profile}
+    ]).to_csv(index=False),file_name="sti_inquiry_quality_summary.csv",mime="text/csv")
+   else:st.info("No consented inquiry records available. Ask test questions with explicit consent to populate this dashboard.")
+   st.info("**Outbreak reporting:** No outbreak can be established from these data. If an unusual inquiry trend is observed, report it as an unverified information-seeking signal for manual investigation, not a public-health alert.")
   with t6:
    s=Session();st.dataframe([{"time":x.created_at,"actor":x.actor,"action":x.action,"object":f"{x.object_type}:{x.object_id}","details":x.details} for x in s.query(Audit).order_by(Audit.id.desc()).limit(200)],use_container_width=True);s.close()
   with t7:
